@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware   # <-- ADD THIS IMPORT
 from typing import List, Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -9,6 +10,16 @@ from neo4j_connector import get_driver
 load_dotenv()
 
 app = FastAPI(title="AML API")
+
+# ADD CORS MIDDLEWARE (allow all origins for demo; restrict later)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],            # Allows all domains (change to your Vercel URL in production)
+    allow_credentials=True,
+    allow_methods=["*"],            # Allows all HTTP methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],            # Allows all headers
+)
+
 supabase = get_supabase()
 neo4j_driver = get_driver()
 
