@@ -1,10 +1,10 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from typing import List, Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from .supabase_client import get_supabase
-from .neo4j_connector import get_driver
+from supabase_client import get_supabase
+from neo4j_connector import get_driver
 
 load_dotenv()
 
@@ -59,7 +59,6 @@ async def get_neighbors(entity_id: str):
         for record in result:
             n = record["n"]
             m = record["m"]
-            # Convert nodes to dicts
             nodes[n.element_id] = dict(n.items())
             nodes[m.element_id] = dict(m.items())
             edges.append({
