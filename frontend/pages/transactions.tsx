@@ -15,6 +15,11 @@ export default function TransactionsPage() {
 
   if (loading) return <div className="p-8">Loading transactions...</div>;
 
+  const formatRisk = (score: number | undefined) => {
+    if (score === undefined) return '-';
+    return `${(score * 100).toFixed(0)}%`;
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Recent Transactions</h1>
@@ -37,7 +42,7 @@ export default function TransactionsPage() {
                 <td className="px-4 py-2">{tx.user_id || '-'}</td>
                 <td className="px-4 py-2">₦{tx.amount.toLocaleString()}</td>
                 <td className="px-4 py-2 text-sm">{new Date(tx.timestamp).toLocaleString()}</td>
-                <td className="px-4 py-2">{(tx.risk_score * 100).toFixed(0)}%</td>
+                <td className="px-4 py-2">{formatRisk(tx.risk_score)}</td>
                 <td className="px-4 py-2">{tx.status}</td>
               </tr>
             ))}

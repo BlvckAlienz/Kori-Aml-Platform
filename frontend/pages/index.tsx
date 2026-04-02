@@ -27,6 +27,12 @@ export default function Home() {
 
   if (loading) return <div className="p-8">Loading dashboard...</div>;
 
+  // Helper to format risk score
+  const formatRisk = (score: number | undefined) => {
+    if (score === undefined) return '-';
+    return `${(score * 100).toFixed(0)}%`;
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">AML Dashboard</h1>
@@ -51,7 +57,7 @@ export default function Home() {
                   <tr key={tx.transaction_id}>
                     <td className="px-4 py-2 text-sm font-mono">{tx.transaction_id.slice(0,8)}</td>
                     <td className="px-4 py-2 text-sm">₦{tx.amount.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-sm">{(tx.risk_score * 100).toFixed(0)}%</td>
+                    <td className="px-4 py-2 text-sm">{formatRisk(tx.risk_score)}</td>
                     <td className="px-4 py-2 text-sm">{tx.status}</td>
                   </tr>
                 ))}
@@ -78,7 +84,7 @@ export default function Home() {
                 {alerts.map(alert => (
                   <tr key={alert.id} className="bg-red-50">
                     <td className="px-4 py-2 text-sm font-mono">{alert.transaction_id.slice(0,8)}</td>
-                    <td className="px-4 py-2 text-sm font-bold text-red-600">{(alert.risk_score * 100).toFixed(0)}%</td>
+                    <td className="px-4 py-2 text-sm font-bold text-red-600">{formatRisk(alert.risk_score)}</td>
                     <td className="px-4 py-2 text-sm">{alert.description}</td>
                   </tr>
                 ))}

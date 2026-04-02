@@ -15,6 +15,11 @@ export default function AlertsPage() {
 
   if (loading) return <div className="p-8">Loading alerts...</div>;
 
+  const formatRisk = (score: number | undefined) => {
+    if (score === undefined) return '-';
+    return `${(score * 100).toFixed(0)}%`;
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Alerts</h1>
@@ -32,7 +37,7 @@ export default function AlertsPage() {
             {alerts.map(alert => (
               <tr key={alert.id}>
                 <td className="px-4 py-2 font-mono text-sm">{alert.transaction_id.slice(0,8)}</td>
-                <td className="px-4 py-2">{(alert.risk_score * 100).toFixed(0)}%</td>
+                <td className="px-4 py-2">{formatRisk(alert.risk_score)}</td>
                 <td className="px-4 py-2">{alert.description}</td>
                 <td className="px-4 py-2">{alert.status}</td>
               </tr>
