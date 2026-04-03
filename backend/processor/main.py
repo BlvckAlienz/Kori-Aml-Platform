@@ -1,13 +1,14 @@
 import os
 import logging
 import time
+import json
+import threading
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from redis_consumer import pop_transaction
 from graph_updater import GraphUpdater
-from risk_scorer import score_transaction
+from supabase_client import create_alert, update_transaction_breakdown
 from blocklist import check_blocklist
-from supabase_client import create_alert
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -20,27 +21,42 @@ graph = GraphUpdater()
 def health():
     return jsonify({"status": "healthy", "service": "processor"})
 
+def calculate_risk_and_breakdown(tx, block_score):
+    breakdown = []
+    score = 0.0
+    amount = tx.get("amount", 0)
+    if amount > 500000:
+        breakdown.append({"reason": "Amount > ₦500,000", "contribution": 0.3})
+        score += 0.3
+    if block_score > 0:
+        breakdown.append({"reason": "Phone/IP/wallet on blocklist", "contribution": block_score})
+        score += block_score
+    # You can add more rules here (e.g., time of day, velocity)
+    return min(score, 1.0), breakdown
+
 def continuous_process():
-    """Loop forever, processing transactions as they arrive."""
-    logger.info("Continuous processor started. Waiting for transactions...")
+    logger.info("Continuous processor started.")
     while True:
-        tx = pop_transaction(timeout=5)   # waits up to 5 seconds
+        tx = pop_transaction(timeout=5)
         if tx:
-            logger.info(f"Processing transaction: {tx['transaction_id']}")
+            logger.info(f"Processing: {tx['transaction_id']}")
             block_score = check_blocklist(tx)
-            risk_score = score_transaction(tx, block_score)
+            risk_score, breakdown = calculate_risk_and_breakdown(tx, block_score)
+            
+            # Store breakdown in Supabase
+            update_transaction_breakdown(tx['transaction_id'], breakdown)
+            
+            # Update graph
             graph.process_transaction(tx, risk_score)
+            
             if risk_score >= 0.8:
-                create_alert(tx, risk_score)
-                logger.warning(f"Alert created for {tx['transaction_id']} (risk={risk_score:.2f})")
+                create_alert(tx, risk_score, breakdown)
+                logger.warning(f"Alert for {tx['transaction_id']} (risk={risk_score})")
         else:
-            # No transaction, just sleep a little to avoid busy loop
             time.sleep(1)
 
 if __name__ == '__main__':
-    # Start the continuous processor in a background thread
-    import threading
-    processor_thread = threading.Thread(target=continuous_process, daemon=True)
-    processor_thread.start()
+    thread = threading.Thread(target=continuous_process, daemon=True)
+    thread.start()
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port)

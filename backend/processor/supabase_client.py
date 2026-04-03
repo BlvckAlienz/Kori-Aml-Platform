@@ -14,14 +14,22 @@ def get_supabase():
         _supabase = create_client(url, key)
     return _supabase
 
-def create_alert(tx: dict, risk_score: float):
+def update_transaction_breakdown(transaction_id: str, breakdown: list):
     try:
         supabase = get_supabase()
+        supabase.table("transactions").update({"risk_breakdown": breakdown}).eq("transaction_id", transaction_id).execute()
+    except Exception as e:
+        logger.error(f"Failed to update breakdown: {e}")
+
+def create_alert(tx: dict, risk_score: float, breakdown: list):
+    try:
+        supabase = get_supabase()
+        description = f"Risk {risk_score:.2f}: " + ", ".join([f"{b['reason']} (+{b['contribution']})" for b in breakdown])
         alert_data = {
             "transaction_id": tx["transaction_id"],
             "entity_id": tx.get("user_id"),
             "risk_score": risk_score,
-            "description": f"High risk transaction: amount {tx['amount']}, risk {risk_score:.2f}",
+            "description": description,
             "status": "open"
         }
         supabase.table("alerts").insert(alert_data).execute()

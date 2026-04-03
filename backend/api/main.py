@@ -1,6 +1,6 @@
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware   # <-- ADD THIS IMPORT
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -11,18 +11,19 @@ load_dotenv()
 
 app = FastAPI(title="AML API")
 
-# ADD CORS MIDDLEWARE (allow all origins for demo; restrict later)
+# CORS – allow all origins for demo (restrict later to your Vercel domain)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],            # Allows all domains (change to your Vercel URL in production)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],            # Allows all HTTP methods (GET, POST, OPTIONS, etc.)
-    allow_headers=["*"],            # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 supabase = get_supabase()
 neo4j_driver = get_driver()
 
+# ========== Pydantic Models ==========
 class AlertResponse(BaseModel):
     id: str
     transaction_id: str
@@ -39,7 +40,12 @@ class TransactionResponse(BaseModel):
     timestamp: str
     risk_score: Optional[float]
     status: str
+    risk_breakdown: Optional[list] = None   # New field for breakdown
 
+class StatusUpdate(BaseModel):
+    status: str  # 'open', 'investigating', 'false_positive', 'confirmed'
+
+# ========== Existing Endpoints (kept) ==========
 @app.get("/alerts", response_model=List[AlertResponse])
 async def get_alerts(limit: int = 50, status: Optional[str] = "open"):
     query = supabase.table("alerts").select("*").order("created_at", desc=True).limit(limit)
@@ -47,6 +53,13 @@ async def get_alerts(limit: int = 50, status: Optional[str] = "open"):
         query = query.eq("status", status)
     result = query.execute()
     return result.data
+
+@app.patch("/alerts/{alert_id}/status")
+async def update_alert_status(alert_id: str, update: StatusUpdate):
+    result = supabase.table("alerts").update({"status": update.status}).eq("id", alert_id).execute()
+    if not result.data:
+        raise HTTPException(404, "Alert not found")
+    return {"success": True}
 
 @app.get("/transactions/recent", response_model=List[TransactionResponse])
 async def get_recent_transactions(limit: int = 100):
@@ -83,3 +96,48 @@ async def get_neighbors(entity_id: str):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+# ========== New Endpoints for Dashboard Enhancements ==========
+@app.get("/transaction/{transaction_id}/risk-breakdown")
+async def get_risk_breakdown(transaction_id: str):
+    result = supabase.table("transactions").select("risk_breakdown").eq("transaction_id", transaction_id).execute()
+    if not result.data:
+        raise HTTPException(404, "Transaction not found")
+    breakdown = result.data[0].get("risk_breakdown", [])
+    return {"breakdown": breakdown}
+
+@app.get("/alert/{alert_id}/graph")
+async def get_alert_graph(alert_id: str):
+    # Get transaction_id from the alert
+    alert = supabase.table("alerts").select("transaction_id").eq("id", alert_id).execute()
+    if not alert.data:
+        raise HTTPException(404, "Alert not found")
+    tx_id = alert.data[0]["transaction_id"]
+
+    # Cypher query: 2 hops around the transaction
+    with neo4j_driver.session() as session:
+        result = session.run("""
+            MATCH path = (t:Transaction {transaction_id: $tx_id})-[*1..2]-(connected)
+            UNWIND nodes(path) as n
+            UNWIND relationships(path) as r
+            RETURN collect(DISTINCT n) as nodes, collect(DISTINCT r) as edges
+        """, tx_id=tx_id)
+        record = result.single()
+        if not record:
+            return {"nodes": [], "edges": []}
+        nodes = []
+        for n in record["nodes"]:
+            nodes.append({
+                "id": n.element_id,
+                "label": list(n.labels)[0],
+                "properties": dict(n),
+                "risk_score": n.get("risk_score", 0)
+            })
+        edges = []
+        for r in record["edges"]:
+            edges.append({
+                "source": r.start_node.element_id,
+                "target": r.end_node.element_id,
+                "type": r.type
+            })
+        return {"nodes": nodes, "edges": edges}
