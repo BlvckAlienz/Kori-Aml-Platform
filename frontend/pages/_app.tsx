@@ -4,7 +4,11 @@ import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 import '../styles/globals.css';
 
-const PUBLIC_ROUTES = ['/login'];
+// Routes accessible without authentication
+const PUBLIC_ROUTES = ['/', '/login'];
+
+// After login, go here
+const DEFAULT_AUTH_ROUTE = '/dashboard';
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -16,8 +20,15 @@ export default function App({ Component, pageProps }: AppProps) {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!mounted) return;
-      if (!session && !PUBLIC_ROUTES.includes(router.pathname)) {
+
+      const isPublic = PUBLIC_ROUTES.includes(router.pathname);
+
+      if (!session && !isPublic) {
+        // Not logged in, trying to access protected route → send to login
         router.replace('/login');
+      } else if (session && router.pathname === '/login') {
+        // Already logged in, trying to visit login → send to dashboard
+        router.replace(DEFAULT_AUTH_ROUTE);
       }
       setChecking(false);
     };
@@ -26,7 +37,8 @@ export default function App({ Component, pageProps }: AppProps) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
-      if (!session && !PUBLIC_ROUTES.includes(router.pathname)) {
+      const isPublic = PUBLIC_ROUTES.includes(router.pathname);
+      if (!session && !isPublic) {
         router.replace('/login');
       }
     });
@@ -37,6 +49,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [router.pathname]);
 
+  // Show spinner while checking auth on protected routes
   if (checking && !PUBLIC_ROUTES.includes(router.pathname)) {
     return (
       <div style={{

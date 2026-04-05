@@ -9,7 +9,7 @@ interface LayoutProps {
 
 // ─── NAV ITEMS ────────────────────────────────────────────────────────────────
 const navItems = [
-  { href: '/',          label: 'Dashboard',      icon: '⬡' },
+  { href: '/dashboard', label: 'Dashboard', icon: '⬡' },
   { href: '/transactions', label: 'Transactions', icon: '⇄' },
   { href: '/alerts',    label: 'Alerts',          icon: '◈' },
   { href: '/blocklist', label: 'Blocklist',       icon: '⊘' },
