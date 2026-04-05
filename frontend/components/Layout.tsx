@@ -7,9 +7,11 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-// ─── NAV ITEMS ────────────────────────────────────────────────────────────────
+// ─── NAV ITEMS ──────────────────────────────────────────────────────────────
+// CHANGE 1 from original: Dashboard href is '/dashboard' not '/'
+// because '/' is now the public landing page.
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: '⬡' },
+  { href: '/dashboard', label: 'Dashboard',      icon: '⬡' },
   { href: '/transactions', label: 'Transactions', icon: '⇄' },
   { href: '/alerts',    label: 'Alerts',          icon: '◈' },
   { href: '/blocklist', label: 'Blocklist',       icon: '⊘' },
@@ -23,13 +25,31 @@ export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [time, setTime] = useState('');
+
+  // CHANGE 2: Two timezone clocks instead of one
+  const [lagosTime, setLagosTime]     = useState('');
+  const [nairobiTime, setNairobiTime] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
-    const tick = () => setTime(new Date().toLocaleTimeString('en-NG', { hour12: false }));
+
+    const tick = () => {
+      const now = new Date();
+      setLagosTime(
+        now.toLocaleTimeString('en-NG', {
+          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Africa/Lagos',      // WAT = UTC+1
+        })
+      );
+      setNairobiTime(
+        now.toLocaleTimeString('en-KE', {
+          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Africa/Nairobi',    // EAT = UTC+3
+        })
+      );
+    };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -42,6 +62,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="kori-root">
+      {/* ── SIDEBAR ── */}
       <aside className={`kori-sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
         <div className="sidebar-brand">
           <div className="brand-mark">
@@ -60,9 +81,10 @@ export default function Layout({ children }: LayoutProps) {
 
         <nav className="sidebar-nav">
           {navItems.map((item) => {
+            // CHANGE 3: active check uses '/dashboard' guard, not '/'
             const active =
               router.pathname === item.href ||
-              (item.href !== '/' && router.pathname.startsWith(item.href));
+              (item.href !== '/dashboard' && router.pathname.startsWith(item.href));
             return (
               <Link
                 key={item.href}
@@ -96,22 +118,36 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </aside>
 
+      {/* ── MAIN ── */}
       <main className="kori-main">
         <header className="kori-topbar">
           <div className="topbar-left">
             <h1 className="page-title">
               {navItems.find((i) =>
-                i.href === '/' ? router.pathname === '/' : router.pathname.startsWith(i.href)
+                i.href === '/dashboard'
+                  ? router.pathname === '/dashboard'
+                  : router.pathname.startsWith(i.href)
               )?.label ?? 'Dashboard'}
             </h1>
             <span className="page-breadcrumb">
               Nigerian &amp; Kenyan AML/CFT/CPF Intelligence Platform
             </span>
           </div>
+
+          {/* CHANGE 4: Dual clocks — Lagos (WAT) + Nairobi (EAT) */}
           <div className="topbar-right">
-            <div className="topbar-clock">
-              <span className="clock-label">WAT</span>
-              <span className="clock-time">{time}</span>
+            <div className="topbar-clocks">
+              <div className="clock-block">
+                <span className="clock-city">Lagos</span>
+                <span className="clock-tz">WAT</span>
+                <span className="clock-time">{lagosTime}</span>
+              </div>
+              <div className="clock-divider" />
+              <div className="clock-block">
+                <span className="clock-city">Nairobi</span>
+                <span className="clock-tz">EAT</span>
+                <span className="clock-time clock-nairobi">{nairobiTime}</span>
+              </div>
             </div>
             <div className="topbar-flag">🇳🇬🇰🇪 CBN · CBK Aligned</div>
           </div>
@@ -120,6 +156,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="kori-content">{children}</div>
       </main>
 
+      {/* ── ALL CSS: 100% original preserved + new clock styles appended ── */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -405,11 +442,10 @@ export default function Layout({ children }: LayoutProps) {
 
         .topbar-right { display: flex; align-items: center; gap: 20px; }
 
+        /* ORIGINAL single clock kept for fallback — overridden by dual clock below */
         .topbar-clock { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-
-        .clock-label { font-size: 9px; letter-spacing: 0.1em; color: var(--text-dim); }
-
-        .clock-time {
+        .clock-label  { font-size: 9px; letter-spacing: 0.1em; color: var(--text-dim); }
+        .clock-time   {
           font-family: 'JetBrains Mono', monospace;
           font-size: 16px;
           color: var(--cyan);
@@ -703,6 +739,46 @@ export default function Layout({ children }: LayoutProps) {
           .stat-grid    { grid-template-columns: 1fr 1fr; }
           .kori-content { padding: 16px; }
           .grid-2, .grid-3 { grid-template-columns: 1fr; }
+        }
+
+        /* ── DUAL CLOCK (new — added below original CSS, no conflicts) ── */
+        .topbar-clocks {
+          display: flex;
+          align-items: center;
+          gap: 0;
+        }
+        .clock-block {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 1px;
+        }
+        .clock-city {
+          font-size: 8px;
+          letter-spacing: 0.12em;
+          color: var(--text-dim);
+          text-transform: uppercase;
+          line-height: 1;
+        }
+        .clock-tz {
+          font-size: 8px;
+          letter-spacing: 0.08em;
+          color: var(--text-muted);
+          line-height: 1;
+        }
+        /* .clock-time already defined above — reused here */
+        .clock-nairobi {
+          color: #34d399; /* distinct EAT green vs Lagos cyan */
+        }
+        .clock-divider {
+          width: 1px;
+          height: 28px;
+          background: var(--border);
+          margin: 0 14px;
+          flex-shrink: 0;
+        }
+        @media (max-width: 768px) {
+          .topbar-clocks { display: none; }
         }
       `}</style>
     </div>
