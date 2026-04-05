@@ -2,7 +2,6 @@ import type { AppProps } from 'next/app';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
-import '../styles/globals.css';
 
 const PUBLIC_ROUTES = ['/login'];
 
@@ -15,7 +14,9 @@ export default function App({ Component, pageProps }: AppProps) {
 
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+
       if (!mounted) return;
+
       if (!session && !PUBLIC_ROUTES.includes(router.pathname)) {
         router.replace('/login');
       }
@@ -37,6 +38,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [router.pathname]);
 
+  // Show nothing while checking auth (prevents flash of protected content)
   if (checking && !PUBLIC_ROUTES.includes(router.pathname)) {
     return (
       <div style={{
