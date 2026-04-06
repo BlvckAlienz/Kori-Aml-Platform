@@ -239,8 +239,8 @@ export default function Landing() {
                   <div className="ps-label">Typical manual fraud ring investigation time</div>
                 </div>
                 <div className="problem-stat-card cyan">
-                  <div className="ps-value">28 sec</div>
-                  <div className="ps-label">Time for Kori to detect & surface a ₦9.9M ring</div>
+                  <div className="ps-value">30 sec</div>
+                  <div className="ps-label">Time for Kori to detect & surface a fraud ring</div>
                 </div>
               </div>
             </div>

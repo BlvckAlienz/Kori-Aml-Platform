@@ -28,16 +28,15 @@ const TIERS = [
     reqDay: '5,000 req/day',
     price: '₦150,000 / KES 15,000',
     priceColor: 'var(--green)',
-    note: 'per month',
   },
   {
     id: 'professional',
-    name: 'Professional',
+    name: 'Pro',
     badge: 'badge-cyan',
     reqDay: '10,000 req/day',
     price: '₦450,000 / KES 45,000',
     priceColor: 'var(--cyan)',
-    note: 'per month · Most popular',
+    note: 'Most popular',
   },
   {
     id: 'growth',
@@ -46,7 +45,6 @@ const TIERS = [
     reqDay: '50,000 req/day',
     price: '₦1,200,000 / KES 120,000',
     priceColor: 'var(--amber)',
-    note: 'per month',
   },
   {
     id: 'enterprise',
