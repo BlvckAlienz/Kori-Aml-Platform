@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
 import '../styles/globals.css';
 
 // Routes accessible without authentication
-const PUBLIC_ROUTES = ['/', '/login'];
+const PUBLIC_ROUTES = ['/', '/login', '/legal/privacy-policy', '/legal/terms-of-service'];
+// Note: .html static files bypass _app.tsx entirely, this is just a safety guard
 
 // After login, go here
 const DEFAULT_AUTH_ROUTE = '/dashboard';

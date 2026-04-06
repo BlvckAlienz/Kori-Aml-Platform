@@ -107,10 +107,25 @@ export default function Landing() {
   }, []);
 
   const handleDemoRequest = async () => {
-    if (!demoEmail || !demoEmail.includes('@')) return;
-    const { supabase: sb } = await import('../lib/supabase');
-    // get all field values from state
-    await sb.from('demo_requests').insert({ institution: demoInstitution, email: demoEmail, role: demoRole, institution_type: demoType, description: demoDesc });
+    if (!demoEmail || !demoEmail.includes('@')) {
+      return;
+    }
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      await sb.from('demo_requests').insert({
+        institution:      demoInstitution || 'Not provided',
+        email:            demoEmail,
+        role:             demoRole || null,
+        institution_type: demoType || null,
+        description:      demoDesc || null,
+      });
+    } catch (e) {
+      console.error('Demo request error:', e);
+    }
     setDemoSent(true);
   };
 
@@ -418,9 +433,7 @@ Content-Type: application/json
                 ) : (
                   <div className="demo-form">
                     <div className="demo-form-title">Request a Demo</div>
-                    <div className="demo-form-sub">
-                      For banks, fintechs, VASPs, and regulators
-                    </div>
+                    <div className="demo-form-sub">For banks, fintechs, VASPs, and regulators</div>
                     <input
                       className="demo-input"
                       placeholder="Institution name"
@@ -442,7 +455,11 @@ Content-Type: application/json
                       value={demoRole}
                       onChange={(e) => setDemoRole(e.target.value)}
                     />
-                    <select className="demo-input demo-select" value={demoType} onChange={(e) => setDemoType(e.target.value)}>
+                    <select
+                      className="demo-input demo-select"
+                      value={demoType}
+                      onChange={(e) => setDemoType(e.target.value)}
+                    >
                       <option value="">Institution type</option>
                       <option>Commercial Bank</option>
                       <option>Fintech / Payment Provider</option>
@@ -450,12 +467,23 @@ Content-Type: application/json
                       <option>Microfinance Bank</option>
                       <option>Mobile Money Operator</option>
                       <option>Regulator / Government</option>
+                      <option>Others</option>
                     </select>
+                    <textarea
+                      className="demo-input"
+                      placeholder="Brief description of your compliance requirements or challenges…"
+                      value={demoDesc}
+                      onChange={(e) => setDemoDesc(e.target.value)}
+                      rows={3}
+                      style={{ resize: 'vertical', minHeight: 80 }}
+                    />
                     <button className="demo-submit" onClick={handleDemoRequest}>
                       Request Live Demo →
                     </button>
-                    <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center' }}>
-                      Or reach us directly: <a href="mailto:Business@seamount.io" style={{ color: '#00d4ff' }}>Business@seamount.io</a> · +254-751875374
+                    <div style={{ textAlign: 'center', fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                      Or contact us directly:&nbsp;
+                      <a href="mailto:Business@seamount.io" style={{ color: '#00d4ff' }}>Business@seamount.io</a>
+                      &nbsp;·&nbsp;+254-751875374
                     </div>
                   </div>
                 )}
@@ -477,8 +505,8 @@ Content-Type: application/json
               <a href="#compliance">Compliance</a>
               <a href="#pricing">Pricing</a>
               <Link href="/login">Dashboard Login</Link>
-              <a href="/privacy-policy">Privacy Policy</a>
-              <a href="/terms-of-service">Terms of Service</a>
+              <a href="/legal/privacy-policy.html"  target="_blank" rel="noopener">Privacy Policy</a>
+              <a href="/legal/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a>
             </div>
             <div className="footer-legal">
               © 2026 Kori · A Seamount.io Product · Built for CBN CMD/DIR/PUB/CIR/001006 (March 2026)

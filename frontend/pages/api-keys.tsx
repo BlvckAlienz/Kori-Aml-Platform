@@ -194,13 +194,18 @@ export default function ApiKeysPage() {
               </button>
             )}
             {tier.id === 'enterprise' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); router.push('/pricing#enterprise'); }}
-                className="btn btn-sm"
-                style={{ width: '100%', justifyContent: 'center', fontSize: 11, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: 'var(--amber)' }}
+              <a
+                href="mailto:Business@seamount.io?subject=Kori Enterprise Enquiry&body=Institution:%0D%0AContact name:%0D%0APhone:%0D%0ARequirements:"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: 'block', textAlign: 'center', padding: '4px 10px',
+                  fontSize: 11, borderRadius: 6, fontWeight: 600,
+                  background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+                  color: 'var(--amber)', textDecoration: 'none',
+                }}
               >
                 Contact Sales →
-              </button>
+              </a>
             )}
           </div>
         ))}

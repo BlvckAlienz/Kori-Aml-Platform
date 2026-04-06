@@ -177,8 +177,8 @@ export default function Layout({ children }: LayoutProps) {
           --green-dim: rgba(16,185,129,0.15);
           --purple: #8b5cf6;
           --text: #e2e8f0;
-          --text-dim: #64748b;
-          --text-muted: #334155;
+          --text-dim: #94a3b8;
+          --text-muted: #64748b;
           --sidebar-w: 220px;
           --sidebar-w-collapsed: 64px;
         }
