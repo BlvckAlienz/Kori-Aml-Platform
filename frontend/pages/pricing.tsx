@@ -508,7 +508,7 @@ export default function Pricing() {
           </div>
         </div>
         <a
-          href="mailto:enterprise@kori.seamount.io?subject=Kori Enterprise Inquiry"
+          href="mailto:Business@seamount.io?subject=Kori Enterprise Inquiry"
           style={{
             padding: '12px 28px',
             background: 'transparent',

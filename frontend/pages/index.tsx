@@ -94,6 +94,10 @@ const COMPLIANCE = [
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
   const [demoEmail, setDemoEmail] = useState('');
+  const [demoInstitution, setDemoInstitution] = useState('');
+  const [demoRole, setDemoRole] = useState('');
+  const [demoType, setDemoType] = useState('');
+  const [demoDesc, setDemoDesc] = useState('');
   const [demoSent, setDemoSent] = useState(false);
 
   useEffect(() => {
@@ -104,8 +108,9 @@ export default function Landing() {
 
   const handleDemoRequest = async () => {
     if (!demoEmail || !demoEmail.includes('@')) return;
-    // In production: call an API endpoint to notify sales team
-    // For now: just show confirmation
+    const { supabase: sb } = await import('../lib/supabase');
+    // get all field values from state
+    await sb.from('demo_requests').insert({ institution: demoInstitution, email: demoEmail, role: demoRole, institution_type: demoType, description: demoDesc });
     setDemoSent(true);
   };
 
@@ -217,12 +222,10 @@ export default function Landing() {
                   <span className="text-accent">Fraudsters operate in networks.</span>
                 </h2>
                 <p className="section-body">
-                  Three separate transfers of ₦3.3M each, from three "different" customers,
-                  across three different days. Each one below the threshold.
-                  Each one unremarkable in isolation.
+                  Individually unremarkable transfers, from 'different' customers, across different days. Each one below the threshold.
                 </p>
                 <p className="section-body" style={{ marginTop: 16 }}>
-                  Together? A coordinated fraud ring moving ₦9.9M through your institution.
+                  Together? A coordinated network moving significant funds through your institution.
                   Your current system generates three unlinked alerts and calls it a day.
                 </p>
               </div>
@@ -371,7 +374,7 @@ Content-Type: application/json
             </div>
             <p className="comp-note" style={{ marginTop: 24 }}>
               Enterprise plans available from ₦3,000,000/month · Custom SLA · VPC deployment ·
-              <a href="mailto:enterprise@kori.seamount.io" style={{ color: 'var(--cyan)', marginLeft: 4 }}>Contact sales →</a>
+              <a href="#demo" style={{ color: 'var(--cyan)', marginLeft: 4 }}>Contact sales →</a>
             </p>
           </div>
         </section>
@@ -383,9 +386,9 @@ Content-Type: application/json
               <div className="demo-left">
                 <div className="section-eyebrow" style={{ color: 'var(--cyan)' }}>Live Demo</div>
                 <h2 className="demo-h2">
-                  See Kori catch a ₦9.9M
+                  See Kori detect a coordinated
                   <br />
-                  fraud ring in 28 seconds.
+                  fraud ring in under 30 seconds.
                 </h2>
                 <p className="demo-body">
                   We'll walk your compliance team through a live scenario:
@@ -422,6 +425,8 @@ Content-Type: application/json
                       className="demo-input"
                       placeholder="Institution name"
                       type="text"
+                      value={demoInstitution}
+                      onChange={(e) => setDemoInstitution(e.target.value)}
                     />
                     <input
                       className="demo-input"
@@ -434,8 +439,10 @@ Content-Type: application/json
                       className="demo-input"
                       placeholder="Your role (e.g., CMLCO, Head of Compliance)"
                       type="text"
+                      value={demoRole}
+                      onChange={(e) => setDemoRole(e.target.value)}
                     />
-                    <select className="demo-input demo-select">
+                    <select className="demo-input demo-select" value={demoType} onChange={(e) => setDemoType(e.target.value)}>
                       <option value="">Institution type</option>
                       <option>Commercial Bank</option>
                       <option>Fintech / Payment Provider</option>
@@ -447,8 +454,8 @@ Content-Type: application/json
                     <button className="demo-submit" onClick={handleDemoRequest}>
                       Request Live Demo →
                     </button>
-                    <div className="demo-privacy">
-                      Your data is used only to schedule your demo. No spam.
+                    <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+                      Or reach us directly: <a href="mailto:Business@seamount.io" style={{ color: '#00d4ff' }}>Business@seamount.io</a> · +254-751875374
                     </div>
                   </div>
                 )}
@@ -470,8 +477,8 @@ Content-Type: application/json
               <a href="#compliance">Compliance</a>
               <a href="#pricing">Pricing</a>
               <Link href="/login">Dashboard Login</Link>
-              <a href="mailto:support@kori.seamount.io">Support</a>
-              <a href="mailto:enterprise@kori.seamount.io">Enterprise</a>
+              <a href="/privacy-policy">Privacy Policy</a>
+              <a href="/terms-of-service">Terms of Service</a>
             </div>
             <div className="footer-legal">
               © 2026 Kori · A Seamount.io Product · Built for CBN CMD/DIR/PUB/CIR/001006 (March 2026)
