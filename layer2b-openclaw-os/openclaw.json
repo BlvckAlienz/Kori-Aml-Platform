@@ -1,0 +1,107 @@
+{
+  "version": "2026.1.29",
+  "gateway": {
+    "port": 18789,
+    "logLevel": "info"
+  },
+  "workspace": "~/kori-sales-workspace",
+  "agent": {
+    "name": "KORI Sales Intelligence",
+    "persona": "You are the AI sales agent for KORI (kori.seamount.io), Nigeria's graph-based AML intelligence platform. You help the KORI team track regulatory updates, research leads, manage outreach sequences, and prepare for institutional sales conversations. You understand the Nigerian and Kenyan financial regulatory landscape deeply — CBN, CBK, NFIU, FATF, and the specific compliance challenges facing Nigerian fintechs, banks, VASPs, and MMOs.",
+    "heartbeat": {
+      "enabled": true,
+      "intervalMinutes": 30,
+      "quietHoursStart": "22:00",
+      "quietHoursEnd": "06:00",
+      "timezone": "Africa/Lagos"
+    },
+    "scheduledTasks": [
+      {
+        "name": "Daily Sales Briefing",
+        "schedule": "0 7 * * *",
+        "timezone": "Africa/Lagos",
+        "instruction": "Run the KORI Daily Briefing skill and send the full briefing.",
+        "skill": "kori-daily-briefing"
+      },
+      {
+        "name": "Regulatory Monitor",
+        "schedule": "30 6 * * *",
+        "timezone": "Africa/Lagos",
+        "instruction": "Run the CBN Monitor skill — check all regulatory sources and report anything new.",
+        "skill": "kori-cbn-monitor"
+      },
+      {
+        "name": "Weekly Pipeline Report",
+        "schedule": "0 8 * * MON",
+        "timezone": "Africa/Lagos",
+        "instruction": "Generate the weekly pipeline report and send via WhatsApp.",
+        "skill": "kori-daily-briefing"
+      }
+    ]
+  },
+  "llm": {
+    "primary": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Use for all high-quality drafting — outreach, research, briefings"
+    },
+    "fallback": {
+      "provider": "ollama",
+      "model": "llama3.1:8b",
+      "comment": "Use for simple lookups and low-stakes tasks to save API costs"
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "allowFrom": ["YOUR_PHONE_NUMBER_HERE"],
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    },
+    "telegram": {
+      "enabled": true,
+      "comment": "Good backup channel and for log output"
+    }
+  },
+  "skills": {
+    "enabled": [
+      "kori-cbn-monitor",
+      "kori-lead-enricher",
+      "kori-outreach-sequencer",
+      "kori-competitor-monitor",
+      "kori-daily-briefing"
+    ],
+    "skillsPath": "~/kori-sales-workspace/skills"
+  },
+  "memory": {
+    "enabled": true,
+    "path": "~/kori-intel",
+    "files": {
+      "leads": "~/kori-intel/leads-contacted.json",
+      "sequences": "~/kori-intel/sequences/active-sequences.json",
+      "briefings": "~/kori-intel/daily-briefings/",
+      "regulatoryTracker": "~/kori-intel/regulatory-tracker.json",
+      "briefingLog": "~/kori-intel/briefing-log.csv"
+    }
+  },
+  "security": {
+    "sandboxShell": true,
+    "allowedDomains": [
+      "cbn.gov.ng",
+      "nfiu.gov.ng",
+      "centralbank.go.ke",
+      "techcabal.com",
+      "techpoint.africa",
+      "nairametrics.com",
+      "businessday.ng",
+      "linkedin.com",
+      "kori.seamount.io"
+    ],
+    "blockedSkills": [],
+    "noExternalSkills": true,
+    "comment": "NEVER install community skills. Only run skills you wrote yourself. KORI handles financial data."
+  }
+}

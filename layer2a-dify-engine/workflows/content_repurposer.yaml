@@ -1,0 +1,276 @@
+app:
+  description: >
+    KORI Content Repurposing Engine. Takes a voice memo transcript (from Whisper or
+    manual transcription) and generates: LinkedIn posts, tweet threads, WhatsApp
+    messages, newsletter section, blog post, and a short-form video script.
+    One input → eight distribution pieces.
+  icon: "\U0001F504"
+  icon_background: '#1A4731'
+  mode: workflow
+  name: KORI Content Repurposing Engine
+
+kind: app
+version: '0.1.3'
+
+workflow:
+  graph:
+    edges:
+      - id: start-to-extractor
+        source: start
+        target: key-point-extractor
+        type: custom
+      - id: extractor-to-linkedin
+        source: key-point-extractor
+        target: linkedin-writer
+        type: custom
+      - id: extractor-to-twitter
+        source: key-point-extractor
+        target: twitter-writer
+        type: custom
+      - id: extractor-to-whatsapp
+        source: key-point-extractor
+        target: whatsapp-writer
+        type: custom
+      - id: extractor-to-newsletter
+        source: key-point-extractor
+        target: newsletter-writer
+        type: custom
+      - id: linkedin-to-end
+        source: linkedin-writer
+        target: end
+        type: custom
+      - id: twitter-to-end
+        source: twitter-writer
+        target: end
+        type: custom
+      - id: whatsapp-to-end
+        source: whatsapp-writer
+        target: end
+        type: custom
+      - id: newsletter-to-end
+        source: newsletter-writer
+        target: end
+        type: custom
+
+    nodes:
+      - data:
+          desc: ''
+          outputs:
+            - label: Voice memo transcript
+              required: true
+              type: string
+              variable: transcript
+            - label: Topic/angle
+              required: false
+              type: string
+              variable: topic
+            - label: Target audience
+              required: false
+              type: string
+              variable: audience
+          title: Start
+          type: start
+        id: start
+        position: {x: 30, y: 300}
+
+      - data:
+          desc: Extract core insights from the transcript
+          model:
+            completion_params: {max_tokens: 1000, temperature: 0.2}
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - role: system
+              text: >
+                You extract key insights from voice memo transcripts for KORI,
+                a Nigerian AML intelligence platform. You understand the Nigerian
+                fintech and compliance landscape. Your job is to distill transcripts
+                into high-value insights that will resonate with compliance officers,
+                fintech founders, and regulators in Nigeria and Kenya.
+            - role: user
+              text: >
+                Analyze this transcript and extract the core value:
+
+                TRANSCRIPT:
+                {{#start.transcript#}}
+
+                Topic hint: {{#start.topic#}}
+                Audience: {{#start.audience#}}
+
+                Return JSON:
+                {
+                  "core_insight": "one sentence — the most valuable thing in this transcript",
+                  "supporting_points": ["point 1", "point 2", "point 3"],
+                  "nigeria_specific_angle": "how this relates to Nigerian fintech/compliance",
+                  "contrarian_take": "the non-obvious angle that will generate engagement",
+                  "stat_or_fact": "any data point mentioned or implied",
+                  "cta_suggestion": "what action should the audience take",
+                  "best_formats": ["linkedin_post", "tweet_thread", "whatsapp", "newsletter"]
+                }
+          title: Key Point Extractor
+          type: llm
+          variables: []
+          id: key-point-extractor
+          position: {x: 330, y: 300}
+
+      - data:
+          desc: Write 3 LinkedIn posts with different angles
+          model:
+            completion_params: {max_tokens: 1500, temperature: 0.7}
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - role: system
+              text: >
+                You write LinkedIn posts for KORI's founder. The voice is:
+                - Confident but not arrogant
+                - Specifically Nigerian — references local context, players, regulations
+                - Slightly contrarian — challenges the status quo
+                - Evidence-based — always cites the CBN, a data point, or a real case
+                - Never corporate jargon
+                Use line breaks liberally. LinkedIn rewards white space.
+                Never use emojis unless one naturally fits.
+                End with a question to drive comments.
+            - role: user
+              text: >
+                Write 3 LinkedIn posts (each 150-250 words) using these insights:
+
+                {{#key-point-extractor.text#}}
+
+                Original transcript: {{#start.transcript#}}
+
+                Post 1: The "insight" post — share the core learning
+                Post 2: The "hot take" post — the contrarian angle
+                Post 3: The "here's what to do about it" post — practical action
+
+                Separate each post with "---POST BREAK---"
+                Include hashtags (3-5, Nigeria-specific where relevant):
+                #NigeriaFintech #CBNCompliance #AMLNigeria #FinancialCrime
+          title: LinkedIn Writer
+          type: llm
+          variables: []
+          id: linkedin-writer
+          position: {x: 630, y: 100}
+
+      - data:
+          desc: Write a tweet thread
+          model:
+            completion_params: {max_tokens: 1200, temperature: 0.7}
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - role: system
+              text: >
+                You write tweet threads for KORI. Each tweet is max 280 characters.
+                Thread format: hook tweet → 5-7 content tweets → CTA tweet.
+                Hook tweet must make someone stop scrolling. Use numbers when possible.
+                Be specific. Reference real Nigerian institutions, regulations, data.
+            - role: user
+              text: >
+                Write a tweet thread (7-9 tweets) from these insights:
+
+                {{#key-point-extractor.text#}}
+
+                Number each tweet: "1/ 2/ 3/" etc.
+                End with: "Follow for more on AML compliance in Nigeria 🇳🇬"
+                CTA in final tweet: link to kori.seamount.io
+          title: Twitter Writer
+          type: llm
+          variables: []
+          id: twitter-writer
+          position: {x: 630, y: 250}
+
+      - data:
+          desc: Write WhatsApp-format messages for direct sharing
+          model:
+            completion_params: {max_tokens: 800, temperature: 0.6}
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - role: system
+              text: >
+                You write WhatsApp messages for Nigerian B2B professionals.
+                WhatsApp messages should be:
+                - Short paragraphs (max 3 sentences each)
+                - Use *bold* for emphasis (WhatsApp markdown)
+                - Conversational but professional
+                - Relevant to compliance officers in Nigerian financial institutions
+                - Include a clear ask or action at the end
+            - role: user
+              text: >
+                Write 2 WhatsApp-format messages from these insights:
+
+                {{#key-point-extractor.text#}}
+
+                Message 1: For sharing in compliance/fintech WhatsApp groups
+                (informational, positions KORI as thought leader)
+
+                Message 2: For direct outreach to a specific compliance officer
+                (personalized, with a meeting request)
+
+                Separate with "---WA BREAK---"
+          title: WhatsApp Writer
+          type: llm
+          variables: []
+          id: whatsapp-writer
+          position: {x: 630, y: 400}
+
+      - data:
+          desc: Write newsletter section
+          model:
+            completion_params: {max_tokens: 1000, temperature: 0.5}
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - role: system
+              text: >
+                You write a weekly newsletter section for KORI's compliance intelligence
+                newsletter sent to Nigerian and Kenyan fintech professionals.
+                Voice: expert, concise, always actionable. Each section should include
+                one "This Week's Compliance Insight", one "What This Means for Your Institution",
+                and one "Action Item."
+            - role: user
+              text: >
+                Write a newsletter section from these insights:
+
+                {{#key-point-extractor.text#}}
+
+                Original content: {{#start.transcript#}}
+
+                Format:
+                ## [Compelling section headline]
+
+                **This Week's Insight**
+                [2-3 sentences on the core learning]
+
+                **What This Means for Your Institution**
+                [2-3 sentences on practical implications for Nigerian/Kenyan FIs]
+
+                **Action Item**
+                [One specific thing to do this week, with KORI CTA]
+          title: Newsletter Writer
+          type: llm
+          variables: []
+          id: newsletter-writer
+          position: {x: 630, y: 550}
+
+      - data:
+          desc: All content outputs
+          title: End
+          type: end
+          outputs:
+            - value_selector: [linkedin-writer, text]
+              variable: linkedin_posts
+            - value_selector: [twitter-writer, text]
+              variable: tweet_thread
+            - value_selector: [whatsapp-writer, text]
+              variable: whatsapp_messages
+            - value_selector: [newsletter-writer, text]
+              variable: newsletter_section
+        id: end
+        position: {x: 1000, y: 300}

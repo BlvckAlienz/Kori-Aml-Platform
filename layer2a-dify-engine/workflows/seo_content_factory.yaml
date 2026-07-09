@@ -1,0 +1,360 @@
+app:
+  description: >
+    KORI SEO Content Factory. Takes a keyword, target license type, and CBN
+    regulatory section as inputs. Outputs a complete SEO-optimized page (1,500+
+    words, FAQ schema, meta tags, compliance checklist) ready for human review
+    and publishing on kori.seamount.io.
+  icon: "\U0001F4C4"
+  icon_background: '#0B3A6E'
+  mode: workflow
+  name: KORI SEO Content Factory
+
+kind: app
+version: '0.1.3'
+
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+      - data:
+          isInLoop: false
+          sourceType: start
+          targetType: llm
+        id: start-to-keyword-analyzer
+        source: start
+        target: keyword-analyzer
+        type: custom
+      - data:
+          isInLoop: false
+          sourceType: llm
+          targetType: llm
+        id: keyword-analyzer-to-content-writer
+        source: keyword-analyzer
+        target: content-writer
+        type: custom
+      - data:
+          isInLoop: false
+          sourceType: llm
+          targetType: llm
+        id: content-writer-to-faq-generator
+        source: content-writer
+        target: faq-generator
+        type: custom
+      - data:
+          isInLoop: false
+          sourceType: llm
+          targetType: llm
+        id: faq-generator-to-meta-writer
+        source: faq-generator
+        target: meta-writer
+        type: custom
+      - data:
+          isInLoop: false
+          sourceType: llm
+          targetType: end
+        id: meta-writer-to-end
+        source: meta-writer
+        target: end
+        type: custom
+
+    nodes:
+      - data:
+          desc: Inputs from the operator
+          outputs:
+            - label: Target keyword
+              required: true
+              type: string
+              variable: keyword
+            - label: License type (DMB/PSP/MMO/VASP/MFB)
+              required: true
+              type: string
+              variable: license_type
+            - label: CBN section reference (e.g. §5.1.3)
+              required: false
+              type: string
+              variable: cbn_section
+            - label: Deployment deadline (e.g. 18 months)
+              required: false
+              type: string
+              variable: deadline_months
+          title: Start
+          type: start
+        height: 54
+        id: start
+        position:
+          x: 30
+          y: 200
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: Analyze keyword intent and plan the article structure
+          model:
+            completion_params:
+              max_tokens: 800
+              temperature: 0.3
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - id: system-keyword
+              role: system
+              text: >
+                You are an SEO strategist specializing in B2B compliance software
+                for the Nigerian and Kenyan financial sector. You understand CBN, CBK,
+                NFIU, FATF, and how compliance officers search for solutions.
+                Always write in clear, professional language. Never use jargon that
+                a non-technical compliance officer wouldn't understand.
+            - id: user-keyword
+              role: user
+              text: >
+                Analyze this SEO keyword and plan a high-converting article:
+
+                Keyword: {{#start.keyword#}}
+                Target audience: {{#start.license_type#}} compliance officers in Nigeria
+                CBN section: {{#start.cbn_section#}}
+                AML deployment deadline: {{#start.deadline_months#}} months
+
+                Produce a JSON object with:
+                {
+                  "search_intent": "informational|commercial|transactional",
+                  "target_reader": "specific title and pain point",
+                  "article_angle": "the specific hook that will convert readers",
+                  "h1_title": "the exact H1 tag (60 chars max)",
+                  "outline": ["H2 section 1", "H2 section 2", ...],
+                  "primary_cta": "the call to action text",
+                  "compliance_hook": "the specific CBN/regulatory angle",
+                  "related_keywords": ["keyword1", "keyword2", "keyword3"]
+                }
+
+                Return ONLY the JSON object, no markdown fences.
+          title: Keyword Analyzer
+          type: llm
+          variables: []
+        height: 98
+        id: keyword-analyzer
+        position:
+          x: 330
+          y: 200
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: Write the full 1500-word article body
+          model:
+            completion_params:
+              max_tokens: 3000
+              temperature: 0.6
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - id: system-writer
+              role: system
+              text: >
+                You are a compliance writer for KORI, Nigeria's leading graph-based
+                AML intelligence platform. Write authoritative, specific content
+                for compliance officers at Nigerian and Kenyan financial institutions.
+
+                Always include:
+                - Specific CBN/CBK regulatory citations (exact section numbers)
+                - Concrete timelines (the 90-day roadmap deadline, 18/24-month deployment)
+                - Nigeria-specific examples (NIBSS, NIN, BVN, NFIU, STR filing)
+                - A clear reason why graph-based AI beats rule-based systems
+                - A specific CTA to the KORI free CBN Compliance Audit at kori.seamount.io/audit
+
+                Never include: generic platitudes, obvious statements,
+                or content that could apply to any generic AML software.
+            - id: user-writer
+              role: user
+              text: >
+                Write a 1,500-word SEO article using this plan:
+
+                {{#keyword-analyzer.text#}}
+
+                Target keyword: {{#start.keyword#}}
+                License type: {{#start.license_type#}}
+                CBN deadline: {{#start.deadline_months#}} months
+
+                Structure:
+                - Opening hook (problem/urgency — 150 words)
+                - What the CBN actually requires (with exact citations — 300 words)
+                - Why traditional rule-based systems fail (250 words)
+                - How graph-based AML solves it (KORI's approach — 300 words)
+                - Step-by-step: what deploying a compliant system looks like (300 words)
+                - Conclusion with CTA (100 words)
+
+                Write in markdown. Use H2 and H3 headers.
+                Include a "Key Takeaways" box near the top using blockquote format.
+          title: Content Writer
+          type: llm
+          variables: []
+        height: 98
+        id: content-writer
+        position:
+          x: 630
+          y: 200
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: Generate FAQ section with schema markup
+          model:
+            completion_params:
+              max_tokens: 1500
+              temperature: 0.3
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - id: system-faq
+              role: system
+              text: >
+                You generate FAQ content for B2B compliance pages.
+                Always write questions exactly as a compliance officer would ask them
+                in a search engine or AI chatbot (ChatGPT, Perplexity).
+                Answers must be authoritative, specific, and cite CBN regulations.
+                Include JSON-LD FAQ schema markup.
+            - id: user-faq
+              role: user
+              text: >
+                Based on this article about {{#start.keyword#}}, generate:
+
+                1. Eight FAQ questions and answers (Q&A format, 100 words per answer)
+                   Questions should be exactly what compliance officers ask AI chatbots.
+                   Include these topics: CBN requirements, deadlines, costs, integration,
+                   what happens if non-compliant, how KORI differs from alternatives.
+
+                2. JSON-LD FAQ schema markup for all 8 questions.
+
+                3. A downloadable checklist (markdown format) titled:
+                   "{{#start.license_type#}} AML Compliance Checklist: CBN 2026 Standards"
+                   with 12 specific checkboxes mapped to CBN baseline standard sections.
+
+                Article content for context:
+                {{#content-writer.text#}}
+          title: FAQ Generator
+          type: llm
+          variables: []
+        height: 98
+        id: faq-generator
+        position:
+          x: 930
+          y: 200
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: Generate meta tags, OG data, and internal linking suggestions
+          model:
+            completion_params:
+              max_tokens: 600
+              temperature: 0.2
+            mode: chat
+            name: claude-sonnet-4-20250514
+            provider: anthropic
+          prompt_template:
+            - id: system-meta
+              role: system
+              text: >
+                You write SEO meta data for B2B compliance software pages.
+                Always optimize for click-through rate from compliance officers.
+                Keep titles under 60 characters, descriptions under 155 characters.
+            - id: user-meta
+              role: user
+              text: >
+                Generate complete SEO metadata for this page:
+
+                Keyword: {{#start.keyword#}}
+                H1: extracted from article above
+
+                Produce JSON:
+                {
+                  "meta_title": "60 char max, keyword-first",
+                  "meta_description": "155 char max, includes CBN, compliance, CTA",
+                  "og_title": "70 char max for social",
+                  "og_description": "200 char max for social",
+                  "slug": "url-friendly-slug",
+                  "canonical": "https://kori.seamount.io/compliance/[slug]",
+                  "schema_article_type": "Article",
+                  "internal_links": [
+                    {"anchor": "text", "target": "/relevant-page"}
+                  ],
+                  "target_backlink_sites": ["site1.com", "site2.com"],
+                  "publish_priority": "high|medium|low",
+                  "estimated_monthly_searches": "number or range"
+                }
+
+                Return ONLY the JSON.
+          title: Meta Writer
+          type: llm
+          variables: []
+        height: 98
+        id: meta-writer
+        position:
+          x: 1230
+          y: 200
+        width: 244
+
+      - data:
+          desc: Final assembled SEO page ready for review
+          outputs:
+            - label: Article body (markdown)
+              required: true
+              type: string
+              variable: article_body
+            - label: FAQ + schema
+              required: true
+              type: string
+              variable: faq_and_schema
+            - label: Meta data
+              required: true
+              type: string
+              variable: meta_data
+            - label: Full page assembly
+              required: true
+              type: string
+              variable: full_page
+          title: End
+          type: end
+          outputs:
+            - value_selector:
+                - content-writer
+                - text
+              variable: article_body
+            - value_selector:
+                - faq-generator
+                - text
+              variable: faq_and_schema
+            - value_selector:
+                - meta-writer
+                - text
+              variable: meta_data
+        height: 54
+        id: end
+        position:
+          x: 1530
+          y: 200
+        width: 244
