@@ -11,71 +11,80 @@ class GraphUpdater:
         password = os.getenv("NEO4J_PASSWORD")
         if not uri or not user or not password:
             raise ValueError("Neo4j credentials missing")
-        # Standard driver – system trusts the certificate
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
-        logger.info("Neo4j driver initialized with system certificates")
+        logger.info("Neo4j driver initialised")
 
     def close(self):
         self.driver.close()
 
     def process_transaction(self, tx, risk_score):
         with self.driver.session() as session:
-            # Create transaction node
-            session.run(
-                """
-                MERGE (t:Transaction {transaction_id: $tid})
-                SET t.amount = $amount,
-                    t.timestamp = datetime($timestamp),
-                    t.risk_score = $risk,
-                    t.is_fraud = $is_fraud
-                """,
-                tid=tx["transaction_id"],
-                amount=tx["amount"],
-                timestamp=tx["timestamp"],
-                risk=risk_score,
-                is_fraud=tx.get("is_fraud", False)
-            )
-            
-            # Link to user
+            # 1. Create or update transaction node (ignore if already exists)
+            try:
+                session.run(
+                    """
+                    MERGE (t:Transaction {transaction_id: $tid})
+                    SET t.amount = $amount,
+                        t.timestamp = datetime($timestamp),
+                        t.risk_score = $risk,
+                        t.is_fraud = $is_fraud
+                    """,
+                    tid=tx["transaction_id"],
+                    amount=tx["amount"],
+                    timestamp=tx["timestamp"],
+                    risk=risk_score,
+                    is_fraud=tx.get("is_fraud", False)
+                )
+            except Exception as e:
+                # If the node already exists, we ignore the constraint error
+                # and continue to create relationships.
+                if "ConstraintValidationFailed" in str(e):
+                    logger.warning(f"Transaction node already exists: {tx['transaction_id']}")
+                else:
+                    # Re-raise other errors
+                    raise
+
+            # 2. Create relationships (these will not fail if the transaction node exists)
             if tx.get("user_id"):
                 session.run(
                     """
+                    MATCH (t:Transaction {transaction_id: $tid})
                     MERGE (u:User {user_id: $uid})
                     ON CREATE SET u.created_at = datetime()
-                    MERGE (u)-[:MADE_TRANSACTION]->(t:Transaction {transaction_id: $tid})
+                    MERGE (u)-[:MADE_TRANSACTION]->(t)
                     """,
-                    uid=tx["user_id"], tid=tx["transaction_id"]
+                    tid=tx["transaction_id"], uid=tx["user_id"]
                 )
-            
-            # Link to IP
+
             if tx.get("ip_address"):
                 session.run(
                     """
+                    MATCH (t:Transaction {transaction_id: $tid})
                     MERGE (i:IP {ip_address: $ip})
                     ON CREATE SET i.created_at = datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:FROM_IP]->(i)
+                    MERGE (t)-[:FROM_IP]->(i)
                     """,
-                    ip=tx["ip_address"], tid=tx["transaction_id"]
+                    tid=tx["transaction_id"], ip=tx["ip_address"]
                 )
-            
-            # Link to phone (SIM)
+
             if tx.get("phone"):
                 session.run(
                     """
+                    MATCH (t:Transaction {transaction_id: $tid})
                     MERGE (s:SIM {phone_number: $phone})
                     ON CREATE SET s.created_at = datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:USED_SIM]->(s)
+                    MERGE (t)-[:USED_SIM]->(s)
                     """,
-                    phone=tx["phone"], tid=tx["transaction_id"]
+                    tid=tx["transaction_id"], phone=tx["phone"]
                 )
-            
-            # Link to wallet
+
             if tx.get("wallet_address"):
                 session.run(
                     """
+                    MATCH (t:Transaction {transaction_id: $tid})
                     MERGE (w:Wallet {address: $wallet})
                     ON CREATE SET w.created_at = datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:USED_WALLET]->(w)
+                    MERGE (t)-[:USED_WALLET]->(w)
                     """,
-                    wallet=tx["wallet_address"], tid=tx["transaction_id"]
+                    tid=tx["transaction_id"], wallet=tx["wallet_address"]
                 )
