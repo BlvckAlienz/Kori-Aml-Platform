@@ -13,6 +13,7 @@ def get_driver():
         password = os.getenv("NEO4J_PASSWORD")
         if not uri or not password:
             raise RuntimeError("NEO4J_URI and NEO4J_PASSWORD must be set")
+        # Standard driver – system trusts the certificate
         _driver = GraphDatabase.driver(uri, auth=(user, password))
-        logger.info("Neo4j driver initialised")
+        logger.info("Neo4j driver initialised with system certificates")
     return _driver

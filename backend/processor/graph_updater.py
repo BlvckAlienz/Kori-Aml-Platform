@@ -11,7 +11,9 @@ class GraphUpdater:
         password = os.getenv("NEO4J_PASSWORD")
         if not uri or not user or not password:
             raise ValueError("Neo4j credentials missing")
+        # Standard driver – system trusts the certificate
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        logger.info("Neo4j driver initialized with system certificates")
 
     def close(self):
         self.driver.close()
