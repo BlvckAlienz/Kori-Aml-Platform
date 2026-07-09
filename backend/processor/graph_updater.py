@@ -19,32 +19,23 @@ class GraphUpdater:
 
     def process_transaction(self, tx, risk_score):
         with self.driver.session() as session:
-            # 1. Create or update transaction node (ignore if already exists)
-            try:
-                session.run(
-                    """
-                    MERGE (t:Transaction {transaction_id: $tid})
-                    SET t.amount = $amount,
-                        t.timestamp = datetime($timestamp),
-                        t.risk_score = $risk,
-                        t.is_fraud = $is_fraud
-                    """,
-                    tid=tx["transaction_id"],
-                    amount=tx["amount"],
-                    timestamp=tx["timestamp"],
-                    risk=risk_score,
-                    is_fraud=tx.get("is_fraud", False)
-                )
-            except Exception as e:
-                # If the node already exists, we ignore the constraint error
-                # and continue to create relationships.
-                if "ConstraintValidationFailed" in str(e):
-                    logger.warning(f"Transaction node already exists: {tx['transaction_id']}")
-                else:
-                    # Re-raise other errors
-                    raise
+            # 1. Ensure the transaction node exists (MERGE, never fails)
+            session.run(
+                """
+                MERGE (t:Transaction {transaction_id: $tid})
+                SET t.amount = $amount,
+                    t.timestamp = datetime($timestamp),
+                    t.risk_score = $risk,
+                    t.is_fraud = $is_fraud
+                """,
+                tid=tx["transaction_id"],
+                amount=tx["amount"],
+                timestamp=tx["timestamp"],
+                risk=risk_score,
+                is_fraud=tx.get("is_fraud", False)
+            )
 
-            # 2. Create relationships (these will not fail if the transaction node exists)
+            # 2. Create relationships
             if tx.get("user_id"):
                 session.run(
                     """
