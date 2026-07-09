@@ -181,52 +181,80 @@ def calculate_risk(tx):
     return min(score, 1.0), breakdown
 
 
-def update_graph(tx, risk_score):
+def _update_graph_tx(write_tx, tx, risk_score, market, network):
+    tid = tx["transaction_id"]
+
+    write_tx.run("""
+        MERGE (t:Transaction {transaction_id: $tid})
+        SET t.amount=$amount, t.timestamp=datetime($ts),
+            t.risk_score=$risk, t.is_fraud=$fraud,
+            t.channel=$channel, t.market=$market
+    """, tid=tid, amount=tx["amount"],
+        ts=tx.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        risk=risk_score, fraud=tx.get("is_fraud", False),
+        channel=tx.get("channel", "unknown"), market=market)
+
+    if tx.get("user_id"):
+        write_tx.run("""
+            MATCH (t:Transaction {transaction_id: $tid})
+            MERGE (u:User {user_id: $uid})
+            ON CREATE SET u.created_at=datetime(), u.market=$market
+            MERGE (u)-[:MADE_TRANSACTION]->(t)
+        """, uid=tx["user_id"], tid=tid, market=market)
+
+    if tx.get("ip_address"):
+        write_tx.run("""
+            MATCH (t:Transaction {transaction_id: $tid})
+            MERGE (i:IP {ip_address: $ip})
+            ON CREATE SET i.created_at=datetime()
+            MERGE (t)-[:FROM_IP]->(i)
+        """, ip=tx["ip_address"], tid=tid)
+
+    if tx.get("phone"):
+        write_tx.run("""
+            MATCH (t:Transaction {transaction_id: $tid})
+            MERGE (s:SIM {phone_number: $phone})
+            ON CREATE SET s.created_at=datetime(), s.network=$network, s.market=$market
+            MERGE (t)-[:USED_SIM]->(s)
+        """, phone=tx["phone"], network=network, market=market, tid=tid)
+
+    if tx.get("wallet_address"):
+        write_tx.run("""
+            MATCH (t:Transaction {transaction_id: $tid})
+            MERGE (w:Wallet {address: $wallet})
+            ON CREATE SET w.created_at=datetime()
+            MERGE (t)-[:USED_WALLET]->(w)
+        """, wallet=tx["wallet_address"], tid=tid)
+
+    if tx.get("merchant_id"):
+        write_tx.run("""
+            MATCH (t:Transaction {transaction_id: $tid})
+            MERGE (m:Merchant {merchant_id: $mid})
+            ON CREATE SET m.created_at=datetime()
+            MERGE (t)-[:TO_MERCHANT]->(m)
+        """, mid=tx["merchant_id"], tid=tid)
+
+
+def update_graph(tx, risk_score, max_retries=3, base_delay=0.15):
+    tid = tx.get("transaction_id", "?")
     market = _detect_market(tx.get("phone", ""))
     network = _infer_network(tx.get("phone", ""))
-    try:
-        with neo4j_driver.session() as session:
-            session.run("""
-                MERGE (t:Transaction {transaction_id: $tid})
-                SET t.amount=$amount, t.timestamp=datetime($ts),
-                    t.risk_score=$risk, t.is_fraud=$fraud,
-                    t.channel=$channel, t.market=$market
-            """, tid=tx["transaction_id"], amount=tx["amount"],
-                ts=tx.get("timestamp", datetime.now(timezone.utc).isoformat()),
-                risk=risk_score, fraud=tx.get("is_fraud", False),
-                channel=tx.get("channel", "unknown"), market=market)
-            if tx.get("user_id"):
-                session.run("""
-                    MERGE (u:User {user_id: $uid})
-                    ON CREATE SET u.created_at=datetime(), u.market=$market
-                    MERGE (u)-[:MADE_TRANSACTION]->(t:Transaction {transaction_id: $tid})
-                """, uid=tx["user_id"], tid=tx["transaction_id"], market=market)
-            if tx.get("ip_address"):
-                session.run("""
-                    MERGE (i:IP {ip_address: $ip})
-                    ON CREATE SET i.created_at=datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:FROM_IP]->(i)
-                """, ip=tx["ip_address"], tid=tx["transaction_id"])
-            if tx.get("phone"):
-                session.run("""
-                    MERGE (s:SIM {phone_number: $phone})
-                    ON CREATE SET s.created_at=datetime(), s.network=$network, s.market=$market
-                    MERGE (t:Transaction {transaction_id: $tid})-[:USED_SIM]->(s)
-                """, phone=tx["phone"], network=network, market=market, tid=tx["transaction_id"])
-            if tx.get("wallet_address"):
-                session.run("""
-                    MERGE (w:Wallet {address: $wallet})
-                    ON CREATE SET w.created_at=datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:USED_WALLET]->(w)
-                """, wallet=tx["wallet_address"], tid=tx["transaction_id"])
-            if tx.get("merchant_id"):
-                session.run("""
-                    MERGE (m:Merchant {merchant_id: $mid})
-                    ON CREATE SET m.created_at=datetime()
-                    MERGE (t:Transaction {transaction_id: $tid})-[:TO_MERCHANT]->(m)
-                """, mid=tx["merchant_id"], tid=tx["transaction_id"])
-    except Exception as e:
-        logger.error(f"Graph error [{tx.get('transaction_id')}]: {e}")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with neo4j_driver.session() as session:
+                session.execute_write(_update_graph_tx, tx, risk_score, market, network)
+            logger.info(f"Graph updated [{tid}] attempt {attempt}/{max_retries}")
+            return
+        except Exception as e:
+            is_constraint_race = "ConstraintValidationFailed" in str(e)
+            if is_constraint_race and attempt < max_retries:
+                delay = base_delay * attempt
+                logger.warning(f"Constraint race [{tid}] attempt {attempt}/{max_retries}, retry in {delay:.2f}s")
+                time.sleep(delay)
+                continue
+            logger.error(f"Graph error [{tid}]: {e}")
+            return  # keep existing behavior: don't crash process_one, but now it's logged post-retry
 
 
 def _update_tx_breakdown(tx_id, breakdown, risk_score):
