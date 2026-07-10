@@ -145,7 +145,8 @@ export default function TransactionsPage() {
                       <td style={{ color: '#fff' }}>{tx.user_id ?? '—'}</td>
                       <td>
                         <span style={{ color: '#fff', fontWeight: 600 }}>
-                          ₦{tx.amount.toLocaleString()}
+                          {tx.market === 'KE' ? 'KSh ' : '₦ '}
+                          {tx.amount.toLocaleString()}
                         </span>
                       </td>
                       <td className="text-secondary text-sm">

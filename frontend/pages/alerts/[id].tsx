@@ -21,7 +21,7 @@ type RiskBreakdown = { reason: string; contribution: number }[];
 
 type GraphData = {
   nodes: { id: string; label: string; risk_score?: number; properties?: Record<string, any> }[];
-  edges: { source: string; target: string; type: string }[];
+  links: { source: string; target: string; type: string }[];
 };
 
 const STATUS_OPTIONS = [
@@ -105,7 +105,7 @@ export default function AlertDetail() {
                   n.properties?.ip_address ?? n.properties?.phone_number ??
                   n.properties?.address ?? n.label,
           })),
-          links: (gd.edges ?? []).map((e: any) => ({
+          links: (gd.links ?? []).map((e: any) => ({
             source: e.source,
             target: e.target,
             label: e.type,

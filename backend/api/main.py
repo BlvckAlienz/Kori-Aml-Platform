@@ -126,6 +126,7 @@ class TransactionResponse(BaseModel):
     risk_score: Optional[float] = None
     status: str
     risk_breakdown: Optional[List[Dict[str, Any]]] = None
+    market: Optional[str] = None          
 
 
 class StatusUpdate(BaseModel):
@@ -237,7 +238,7 @@ async def get_alert_graph(alert_id: str, key: Optional[Dict] = Depends(verify_ap
                     "target": r.end_node.element_id,
                     "type": r.type,
                 })
-            return {"nodes": nodes, "edges": edges}
+            return {"nodes": nodes, "links": edges}
     except Exception as e:
         logger.error(f"Graph query error: {e}")
         return {"nodes": [], "edges": []}

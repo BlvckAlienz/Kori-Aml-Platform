@@ -6,6 +6,7 @@ export interface Transaction {
   risk_score?: number;
   status: string;
   risk_breakdown?: RiskBreakdownItem[];
+  market?: string;
 }
 
 export interface Alert {

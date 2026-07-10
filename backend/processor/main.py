@@ -182,11 +182,13 @@ def calculate_risk(tx):
     return min(score, 1.0), breakdown
 
 
-def _update_tx_breakdown(tx_id, breakdown, risk_score):
+def _update_tx_breakdown(tx_id, breakdown, risk_score, market):
     try:
-        supabase.table("transactions").update(
-            {"risk_breakdown": breakdown, "risk_score": risk_score}
-        ).eq("transaction_id", tx_id).execute()
+        supabase.table("transactions").update({
+            "risk_breakdown": breakdown,
+            "risk_score": risk_score,
+            "market": market
+        }).eq("transaction_id", tx_id).execute()
     except Exception as e:
         logger.error(f"Breakdown update failed [{tx_id}]: {e}")
 
@@ -219,7 +221,7 @@ def process_one(raw):
     market = _detect_market(tx.get("phone", ""))
     try:
         risk_score, breakdown = calculate_risk(tx)
-        _update_tx_breakdown(tx_id, breakdown, risk_score)
+        _update_tx_breakdown(tx_id, breakdown, risk_score, market)
 
         # Use GraphUpdater.process_transaction (atomic + retry)
         graph_updater.process_transaction(tx, risk_score)
