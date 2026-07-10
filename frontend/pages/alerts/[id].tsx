@@ -57,7 +57,7 @@ export default function AlertDetail() {
 
   const [alert, setAlert] = useState<AlertDetail | null>(null);
   const [breakdown, setBreakdown] = useState<RiskBreakdown>([]);
-  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
