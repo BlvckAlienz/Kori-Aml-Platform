@@ -1,16 +1,19 @@
 """
-Kori AML Processor – Multi-Market Edition (Nigeria + Kenya) v1.1
-- BLPOP timeout=30s (was 5s) → 6x fewer Redis commands → free tier safe
-- Kenya telco detection: Safaricom, Airtel KE, Telkom KE, Equitel, Faiba
-- Market-aware risk rules (NGN vs KES thresholds, EAT timezone, M-PESA limits)
+Kori AML Processor – Multi-Market Edition (Nigeria + Kenya)
+Uses GraphUpdater for atomic Neo4j writes with retry.
 """
-import os, json, time, logging, threading
+import os
+import json
+import time
+import logging
+import threading
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 import redis as redis_lib
 from neo4j import GraphDatabase
 from supabase import create_client
+from graph_updater import GraphUpdater  # <-- import the class
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -19,7 +22,6 @@ logger = logging.getLogger("kori.processor")
 RISK_THRESHOLD = float(os.getenv("RISK_THRESHOLD", "0.8"))
 QUEUE_KEY = os.getenv("REDIS_QUEUE_KEY", "transactions_queue")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "20"))
-# KEY CHANGE: 30s timeout = 2 Redis calls/min = ~86K/month vs 518K at 5s
 BLPOP_TIMEOUT = int(os.getenv("BLPOP_TIMEOUT", "30"))
 
 
@@ -38,22 +40,21 @@ def _connect_with_retry(init_fn, name, retries=5, backoff=3):
 
 redis_client = _connect_with_retry(
     lambda: redis_lib.from_url(os.getenv("REDIS_URL", "redis://localhost:6379")), "Redis")
-neo4j_driver = _connect_with_retry(
-    lambda: GraphDatabase.driver(os.getenv("NEO4J_URI"),
-        auth=(os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD"))), "Neo4j")
 supabase = _connect_with_retry(
     lambda: create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY")), "Supabase")
 
+# Instantiate GraphUpdater (it will connect to Neo4j)
+graph_updater = _connect_with_retry(
+    lambda: GraphUpdater(), "GraphUpdater")  # GraphUpdater.__init__ connects to Neo4j
 
-# --- Nigeria telcos ---
+
+# --- Telco / market detection (keep as is) ---
 NG_NETWORKS = {
     "MTN":    ("0703","0706","0803","0806","0810","0813","0814","0816","0903","0906","0913","0916"),
     "Airtel": ("0701","0708","0802","0808","0812","0901","0902","0904","0907","0912"),
     "Glo":    ("0705","0805","0807","0811","0815","0905","0915"),
     "9mobile":("0809","0817","0818","0909","0908"),
 }
-
-# --- Kenya telcos (CAK Numbering Plan 2024) ---
 KE_NETWORKS = {
     "Safaricom": (
         "0700","0701","0702","0703","0704","0705","0706","0707","0708","0709",
@@ -156,7 +157,7 @@ def calculate_risk(tx):
     # Off-hours (market timezone)
     try:
         ts = datetime.fromisoformat(tx.get("timestamp", "").replace("Z", "+00:00"))
-        utc_offset = 3 if market == "KE" else 1  # EAT vs WAT
+        utc_offset = 3 if market == "KE" else 1
         hour = (ts.hour + utc_offset) % 24
         if 0 <= hour <= 4:
             tz = "EAT" if market == "KE" else "WAT"
@@ -171,90 +172,14 @@ def calculate_risk(tx):
 
     # Kenya M-PESA limit breach
     if market == "KE" and channel in ("mpesa", "m-pesa", "mobile_money", "mpesa_paybill", "mpesa_till"):
-        if amount > 70_000:  # KES 70K single tx limit
+        if amount > 70_000:
             score += 0.2; breakdown.append({"reason": "M-PESA exceeds per-tx limit (KES 70K)", "contribution": 0.2})
 
-    # Equitel (Equity Bank MVNO) high-value flag
+    # Equitel high-value flag
     if market == "KE" and network == "Equitel" and amount > 500_000:
         score += 0.1; breakdown.append({"reason": "Equitel high-value (bank-linked MVNO)", "contribution": 0.1})
 
     return min(score, 1.0), breakdown
-
-
-def _update_graph_tx(write_tx, tx, risk_score, market, network):
-    tid = tx["transaction_id"]
-
-    write_tx.run("""
-        MERGE (t:Transaction {transaction_id: $tid})
-        SET t.amount=$amount, t.timestamp=datetime($ts),
-            t.risk_score=$risk, t.is_fraud=$fraud,
-            t.channel=$channel, t.market=$market
-    """, tid=tid, amount=tx["amount"],
-        ts=tx.get("timestamp", datetime.now(timezone.utc).isoformat()),
-        risk=risk_score, fraud=tx.get("is_fraud", False),
-        channel=tx.get("channel", "unknown"), market=market)
-
-    if tx.get("user_id"):
-        write_tx.run("""
-            MATCH (t:Transaction {transaction_id: $tid})
-            MERGE (u:User {user_id: $uid})
-            ON CREATE SET u.created_at=datetime(), u.market=$market
-            MERGE (u)-[:MADE_TRANSACTION]->(t)
-        """, uid=tx["user_id"], tid=tid, market=market)
-
-    if tx.get("ip_address"):
-        write_tx.run("""
-            MATCH (t:Transaction {transaction_id: $tid})
-            MERGE (i:IP {ip_address: $ip})
-            ON CREATE SET i.created_at=datetime()
-            MERGE (t)-[:FROM_IP]->(i)
-        """, ip=tx["ip_address"], tid=tid)
-
-    if tx.get("phone"):
-        write_tx.run("""
-            MATCH (t:Transaction {transaction_id: $tid})
-            MERGE (s:SIM {phone_number: $phone})
-            ON CREATE SET s.created_at=datetime(), s.network=$network, s.market=$market
-            MERGE (t)-[:USED_SIM]->(s)
-        """, phone=tx["phone"], network=network, market=market, tid=tid)
-
-    if tx.get("wallet_address"):
-        write_tx.run("""
-            MATCH (t:Transaction {transaction_id: $tid})
-            MERGE (w:Wallet {address: $wallet})
-            ON CREATE SET w.created_at=datetime()
-            MERGE (t)-[:USED_WALLET]->(w)
-        """, wallet=tx["wallet_address"], tid=tid)
-
-    if tx.get("merchant_id"):
-        write_tx.run("""
-            MATCH (t:Transaction {transaction_id: $tid})
-            MERGE (m:Merchant {merchant_id: $mid})
-            ON CREATE SET m.created_at=datetime()
-            MERGE (t)-[:TO_MERCHANT]->(m)
-        """, mid=tx["merchant_id"], tid=tid)
-
-
-def update_graph(tx, risk_score, max_retries=3, base_delay=0.15):
-    tid = tx.get("transaction_id", "?")
-    market = _detect_market(tx.get("phone", ""))
-    network = _infer_network(tx.get("phone", ""))
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            with neo4j_driver.session() as session:
-                session.execute_write(_update_graph_tx, tx, risk_score, market, network)
-            logger.info(f"Graph updated [{tid}] attempt {attempt}/{max_retries}")
-            return
-        except Exception as e:
-            is_constraint_race = "ConstraintValidationFailed" in str(e)
-            if is_constraint_race and attempt < max_retries:
-                delay = base_delay * attempt
-                logger.warning(f"Constraint race [{tid}] attempt {attempt}/{max_retries}, retry in {delay:.2f}s")
-                time.sleep(delay)
-                continue
-            logger.error(f"Graph error [{tid}]: {e}")
-            return  # keep existing behavior: don't crash process_one, but now it's logged post-retry
 
 
 def _update_tx_breakdown(tx_id, breakdown, risk_score):
@@ -283,6 +208,7 @@ def _create_alert(tx, risk_score, breakdown):
             "entity_id": tx["transaction_id"],
             "new_value": {"risk_score": risk_score},
         }).execute()
+        logger.warning(f"ALERT [{tx['transaction_id']}] risk={risk_score:.2f}")
     except Exception as e:
         logger.error(f"Alert creation failed [{tx.get('transaction_id')}]: {e}")
 
@@ -294,10 +220,12 @@ def process_one(raw):
     try:
         risk_score, breakdown = calculate_risk(tx)
         _update_tx_breakdown(tx_id, breakdown, risk_score)
-        update_graph(tx, risk_score)
+
+        # Use GraphUpdater.process_transaction (atomic + retry)
+        graph_updater.process_transaction(tx, risk_score)
+
         if risk_score >= RISK_THRESHOLD:
             _create_alert(tx, risk_score, breakdown)
-            logger.warning(f"ALERT [{tx_id}] market={market} risk={risk_score:.2f}")
         else:
             logger.info(f"OK [{tx_id}] market={market} risk={risk_score:.2f}")
     except Exception as e:
@@ -305,7 +233,7 @@ def process_one(raw):
 
 
 def continuous_process():
-    logger.info(f"Loop started blpop_timeout={BLPOP_TIMEOUT}s threshold={RISK_THRESHOLD} markets=NG,KE")
+    logger.info(f"Loop started blpop_timeout={BLPOP_TIMEOUT}s threshold={RISK_THRESHOLD}")
     while True:
         try:
             item = redis_client.blpop(QUEUE_KEY, timeout=BLPOP_TIMEOUT)
@@ -325,8 +253,7 @@ app = Flask(__name__)
 @app.route("/health")
 def health():
     return jsonify({"status": "healthy", "service": "kori-processor",
-        "version": "1.1.0", "markets": ["NG", "KE"], "blpop_timeout": BLPOP_TIMEOUT,
-        "timestamp": datetime.now(timezone.utc).isoformat()})
+        "version": "2.0.0", "markets": ["NG", "KE"], "blpop_timeout": BLPOP_TIMEOUT})
 
 @app.route("/process")
 def trigger_batch():
@@ -340,7 +267,7 @@ def trigger_batch():
 
 @app.route("/queue-length")
 def queue_length():
-    return jsonify({"queue_length": redis_client.llen(QUEUE_KEY), "queue_key": QUEUE_KEY})
+    return jsonify({"queue_length": redis_client.llen(QUEUE_KEY)})
 
 if __name__ == "__main__":
     threading.Thread(target=continuous_process, daemon=True).start()
